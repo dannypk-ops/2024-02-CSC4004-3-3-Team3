@@ -40,10 +40,12 @@ try:
 except:
     SPARSE_ADAM_AVAILABLE = False
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, mark_range, max_iter=30000):
 
     if not SPARSE_ADAM_AVAILABLE and opt.optimizer_type == "sparse_adam":
         sys.exit(f"Trying to use sparse adam but it is not installed, please install the correct rasterizer using pip install [3dgs_accel].")
+
+    # max_iter = saving_iterations[-1]
 
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -189,6 +191,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
 
+            if iteration == max_iter:
+                # viewpoint_cam은 나중에 Labeling이 된 Image가 있는 Cmaera로 수정
+                cam_list = viewpoint_stack
+                for cam in cam_list:
+                    render_pkg = render(cam, gaussians, pipe, bg, use_trained_exp=dataset.train_test_exp, separate_sh=SPARSE_ADAM_AVAILABLE)
+                    cam.depth_map = 1 / (render_pkg["depth"] + 1e-8)
+                scene.mark_crack_points(cam_list, mark_range)
+                scene.save_marked_image()
+
 def prepare_output_and_logger(args):    
     if not args.model_path:
         if os.getenv('OAR_JOB_ID'):
@@ -267,9 +278,23 @@ if __name__ == "__main__":
     parser.add_argument('--disable_viewer', action='store_true', default=False)
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
+    parser.add_argument("--w_range", type=int, default=10)
+    parser.add_argument("--h_range", type=int, default=10)
     args = parser.parse_args(sys.argv[1:])
-    args.save_iterations.append(args.iterations)
+    # args.save_iterations.append(args.iterations)
     
+    if __debug__:
+        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/eiffel_tower/youtube05/towel"
+        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
+        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/9078"
+        args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
+        args.densification_interval = 1000
+        args.save_iterations = [7000, 15000, 30000]
+        args.w_range = 100
+        args.h_range = 100
+        mark_range = [args.w_range, args.h_range]
+        max_iter = 30000
+
     print("Optimizing " + args.model_path)
 
     # Initialize system state (RNG)
@@ -279,7 +304,7 @@ if __name__ == "__main__":
     if not args.disable_viewer:
         network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
+    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, mark_range, max_iter=max_iter)
 
     # All done
     print("\nTraining complete.")

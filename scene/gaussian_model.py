@@ -471,3 +471,68 @@ class GaussianModel:
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
         self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.denom[update_filter] += 1
+
+    def mark_crack_points(self, cam, mark_range):
+        # cam = cam_list[0]
+        # crack이 있다고 판단이 되는 부분에 대한 Image Coordinate를 구함
+        w, h = cam.get_cracked_points()
+        w_range, h_range = mark_range[0], mark_range[1]
+
+        
+        # 해당 이미지 좌표에 대응되는 영역에 존재하는 가우시안들을 찾는다.
+        # 해당 가우시안들의 색상을 변경한다. ( marking )
+        mask = self.get_marked_gaussians(cam, w, h, w_range, h_range)
+        self.modify_gaussians_color(mask, 'R')
+    
+    def get_marked_gaussians(self, cam, w, h, w_range, h_range, distance_threshold = 1.0, epsilon=1e-8):
+        import open3d as o3d
+        from scipy.spatial import cKDTree
+
+        means3D = self.get_xyz.detach().cpu().numpy()
+        homo_means3D = np.hstack([means3D, np.ones((means3D.shape[0], 1))])
+
+        # World to Camera
+        # w2c = cam.world_view_transform.detach().cpu().numpy()
+        w2c = cam.w2c 
+        camera_coord = homo_means3D @ w2c
+        camera_coord = camera_coord[:, :3] / (camera_coord[:, 3:4] + epsilon)
+
+        # Camera to Image
+        image_coord = camera_coord @ cam.intrinsic.T
+        image_coord = image_coord[:, :2] / (image_coord[:, 2:3] + epsilon)
+
+        # image에 Projection이 되는 Gaussian에 대한 mask 생성.
+        image_mask = (image_coord[:, 0] >= 0) & (image_coord[:, 0] <= 1080) & (image_coord[:, 1] >= 0) & (image_coord[:,1] <= 1920)
+
+        # (w, w + w_range), (h, h + h_range) 사이의 Point들에 대한 mask 생성.
+        marked_mask = (image_coord[:, 0] >= w) & (image_coord[:, 0] <= w + w_range) & \
+                      (image_coord[:, 1] >= h) & (image_coord[:, 1] <= h + h_range)
+
+        # 동일한 pixel에 해당하는 가우시안들에 대해서, density가 threshold보다 높은 애들만 masking하는 mask 생성.
+        target_means3D = means3D[marked_mask]
+        tree = cKDTree(means3D)
+        counts = np.array([len(tree.query_ball_point(point, distance_threshold)) for point in target_means3D])
+        
+        valid_indices = np.where(counts >= 1000)[0]
+        marked_indices = np.where(marked_mask)[0]
+        valid_indices_in_means3D = marked_indices[valid_indices]
+
+        valid_mask = np.zeros(means3D.shape[0], dtype=bool)
+        valid_mask[valid_indices_in_means3D] = True
+
+        return valid_mask
+
+    def modify_gaussians_color(self, mask, color = 'R'):
+        from custom_functions import RGB2SH
+
+        if color == 'R':
+            feature = torch.from_numpy(RGB2SH(np.array([1,0,0]))).unsqueeze(0)
+        elif color == 'G':
+            feature = torch.from_numpy(RGB2SH(np.array([0,1,0]))).unsqueeze(0)
+        else:
+            feature = torch.from_numpy(RGB2SH(np.array([0,0,1]))).unsqueeze(0)
+
+        self._features_dc[mask] = feature.expand(mask.sum(), 1, 3).float().cuda()
+        self._features_rest[mask] = feature.expand(mask.sum(), 15, 3).float().cuda()
+        # self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
+
