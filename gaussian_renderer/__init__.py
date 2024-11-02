@@ -126,3 +126,5 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         }
     
     return out
+
+    

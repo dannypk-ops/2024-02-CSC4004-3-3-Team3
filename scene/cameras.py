@@ -12,7 +12,7 @@
 import torch
 from torch import nn
 import numpy as np
-from utils.graphics_utils import getWorld2View2, getProjectionMatrix
+from utils.graphics_utils import getWorld2View2, getProjectionMatrix, fov2focal
 from utils.general_utils import PILtoTorch
 import cv2
 
@@ -31,6 +31,7 @@ class Camera(nn.Module):
         self.FoVx = FoVx
         self.FoVy = FoVy
         self.image_name = image_name
+        self.depth_map = torch.zeros(resolution[0], resolution[1]).to(data_device)
 
         try:
             self.data_device = torch.device(data_device)
@@ -83,10 +84,28 @@ class Camera(nn.Module):
         self.trans = trans
         self.scale = scale
 
+        # camera intrinsic
+        self.intrinsic = np.zeros((3, 3))
+        self.intrinsic[0, 0] = fov2focal(FoVx, self.image_width)
+        self.intrinsic[1, 1] = fov2focal(FoVy, self.image_height)
+        self.intrinsic[0, 2] = self.image_width / 2
+        self.intrinsic[1, 2] = self.image_height / 2
+        self.intrinsic[2, 2] = 1.0
+
+        # camera extrinsic
+        self.w2c = np.zeros((4, 4))
+        self.w2c[:3, :3] = self.R
+        self.w2c[:3, 3] = self.T
+        self.w2c[3, 3] = 1.0
+
         self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1).cuda()
         self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1).cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
+    
+    def get_cracked_points(self):
+        # 실제로는 Cam 별로 crack point에 대한 좌표를 저장하도록 구현해야 한다.
+        return (540, 960)
         
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):
