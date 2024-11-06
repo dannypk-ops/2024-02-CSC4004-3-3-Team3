@@ -193,12 +193,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             if iteration == max_iter:
                 # viewpoint_cam은 나중에 Labeling이 된 Image가 있는 Cmaera로 수정
-                cam_list = viewpoint_stack
-                for cam in cam_list:
-                    render_pkg = render(cam, gaussians, pipe, bg, use_trained_exp=dataset.train_test_exp, separate_sh=SPARSE_ADAM_AVAILABLE)
-                    cam.depth_map = 1 / (render_pkg["depth"] + 1e-8)
+                cam_list = scene.getTrainCameras().copy()
                 scene.mark_crack_points(cam_list, mark_range)
-                scene.save_marked_image()
+                scene.save_marked_image(args.save_path)
 
 def prepare_output_and_logger(args):    
     if not args.model_path:
@@ -288,12 +285,14 @@ if __name__ == "__main__":
         # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
         # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/9078"
         args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
-        args.densification_interval = 1000
-        args.save_iterations = [7000, 15000, 30000]
-        args.w_range = 100
-        args.h_range = 100
-        mark_range = [args.w_range, args.h_range]
-        max_iter = 30000
+
+    args.densification_interval = 1000
+    args.save_iterations = [7000, 15000, 30000]
+    args.save_path = "/home/dannypk99/Desktop/Colmap/ply_output"
+    args.w_range = 100
+    args.h_range = 100
+    mark_range = [args.w_range, args.h_range]
+    max_iter = 100
 
     print("Optimizing " + args.model_path)
 

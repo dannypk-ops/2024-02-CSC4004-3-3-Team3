@@ -491,22 +491,25 @@ class GaussianModel:
         means3D = self.get_xyz.detach().cpu().numpy()
         homo_means3D = np.hstack([means3D, np.ones((means3D.shape[0], 1))])
 
-        # World to Camera
-        # w2c = cam.world_view_transform.detach().cpu().numpy()
-        w2c = cam.w2c 
-        camera_coord = homo_means3D @ w2c
-        camera_coord = camera_coord[:, :3] / (camera_coord[:, 3:4] + epsilon)
+        # Cam information
+        intrinsic = cam.intrinsic
+        R, T = cam.R, cam.T
+        ref_pose = np.eye(4)
+        ref_pose[:3, :3] = R
+        ref_pose[:3, 3] = T
 
-        # Camera to Image
-        image_coord = camera_coord @ cam.intrinsic.T
-        image_coord = image_coord[:, :2] / (image_coord[:, 2:3] + epsilon)
+        # world to camera
+        points_camera = (ref_pose @ homo_means3D.T).T[:, :3]
 
-        # image에 Projection이 되는 Gaussian에 대한 mask 생성.
-        image_mask = (image_coord[:, 0] >= 0) & (image_coord[:, 0] <= 1080) & (image_coord[:, 1] >= 0) & (image_coord[:,1] <= 1920)
+        # camera to image
+        points_2D_homogeneous = (intrinsic @ points_camera.T).T
+
+        # Normalize by the third coordinate to get (x, y)
+        points_2D = points_2D_homogeneous[:, :2] / points_2D_homogeneous[:, 2].reshape(-1,1)
 
         # (w, w + w_range), (h, h + h_range) 사이의 Point들에 대한 mask 생성.
-        marked_mask = (image_coord[:, 0] >= w) & (image_coord[:, 0] <= w + w_range) & \
-                      (image_coord[:, 1] >= h) & (image_coord[:, 1] <= h + h_range)
+        marked_mask = (points_2D[:, 0] >= w) & (points_2D[:, 0] <= w + w_range) & \
+                      (points_2D[:, 1] >= h) & (points_2D[:, 1] <= h + h_range)
 
         # 동일한 pixel에 해당하는 가우시안들에 대해서, density가 threshold보다 높은 애들만 masking하는 mask 생성.
         target_means3D = means3D[marked_mask]
@@ -520,7 +523,12 @@ class GaussianModel:
         valid_mask = np.zeros(means3D.shape[0], dtype=bool)
         valid_mask[valid_indices_in_means3D] = True
 
-        return valid_mask
+        # depth를 고려하여, 가까이 있는(depth가 작은) Gaussian들만을 고려한다.
+        depth = points_camera[:, 2]
+        depth_mask = depth < 5.0
+
+        final_mask = np.logical_and(depth_mask, valid_mask)
+        return final_mask
 
     def modify_gaussians_color(self, mask, color = 'R'):
         from custom_functions import RGB2SH

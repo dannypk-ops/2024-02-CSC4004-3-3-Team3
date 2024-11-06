@@ -105,7 +105,8 @@ class Camera(nn.Module):
     
     def get_cracked_points(self):
         # 실제로는 Cam 별로 crack point에 대한 좌표를 저장하도록 구현해야 한다.
-        return (540, 960)
+        return (818, 759)
+        # return (540, 960)
         
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):

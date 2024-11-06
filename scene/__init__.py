@@ -93,11 +93,15 @@ class Scene:
         with open(os.path.join(self.model_path, "exposure.json"), "w") as f:
             json.dump(exposure_dict, f, indent=2)
 
-    def save_marked_image(self):
-        point_cloud_path = os.path.join(self.model_path, "point_cloud/marked")
-
-        # 경로가 없으면 생성
-        os.makedirs(point_cloud_path, exist_ok=True)
+    def save_marked_image(self, point_cloud_path = None):
+        if point_cloud_path is None:
+            point_cloud_path = os.path.join(self.model_path, "point_cloud/marked")
+            # 경로가 없으면 생성
+            os.makedirs(point_cloud_path, exist_ok=True)
+        else:
+            # marked  Point_cloud는 따로 path를 할당
+            point_cloud_path = os.path.join(point_cloud_path, self.model_path[-10:])
+            os.makedirs(point_cloud_path, exist_ok=True)
         self.gaussians.save_ply(os.path.join(point_cloud_path, "marked_point_cloud.ply"))
 
     def getTrainCameras(self, scale=1.0):
@@ -108,6 +112,8 @@ class Scene:
     
     def mark_crack_points(self, cam_list, mark_range):
         # 실험을 위하여 cam_list[0]만 사용
-        cam_list = [cam_list[0]]
+        # cam_list = [cam_list[0]]
+        mark_range = [100, 424]
         for cam in cam_list:
-            self.gaussians.mark_crack_points(cam, mark_range)
+            if cam.image_name[6:10] == '0017':
+                self.gaussians.mark_crack_points(cam, mark_range)
