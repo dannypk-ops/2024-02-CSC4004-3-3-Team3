@@ -194,7 +194,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if iteration == max_iter:
                 # viewpoint_cam은 나중에 Labeling이 된 Image가 있는 Cmaera로 수정
                 cam_list = scene.getTrainCameras().copy()
-                scene.mark_crack_points(cam_list, mark_range)
+                scene.mark_crack_points(cam_list, mark_range, pipe)
                 scene.save_marked_image(args.save_path)
 
 def prepare_output_and_logger(args):    

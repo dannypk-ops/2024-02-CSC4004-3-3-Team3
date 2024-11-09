@@ -110,10 +110,18 @@ class Scene:
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
     
-    def mark_crack_points(self, cam_list, mark_range):
+    def mark_crack_points(self, cam_list, mark_range, pipe):
         # 실험을 위하여 cam_list[0]만 사용
         # cam_list = [cam_list[0]]
         mark_range = [100, 424]
         for cam in cam_list:
+            # if cam.crack_probability < 0.7:
+            # if True:
+                # if self.gaussians.novelViewRenderer(cam) > 0.5:
+                # self.gaussians.novelViewRenderer(cam, pipe)
+                # self.gaussians.mark_crack_points(cam, mark_range)
+                # else:
+                #     print("Low crack probability, not marking crack points")
             if cam.image_name[6:10] == '0017':
                 self.gaussians.mark_crack_points(cam, mark_range)
+                self.gaussians.novelViewRenderer(cam, pipe)

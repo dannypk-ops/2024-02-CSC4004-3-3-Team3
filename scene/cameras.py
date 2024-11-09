@@ -32,6 +32,9 @@ class Camera(nn.Module):
         self.FoVy = FoVy
         self.image_name = image_name
         self.depth_map = torch.zeros(resolution[0], resolution[1]).to(data_device)
+        
+        # crack Point Information
+        self.cracked_points = [(818, 759)]
 
         try:
             self.data_device = torch.device(data_device)
@@ -40,13 +43,15 @@ class Camera(nn.Module):
             print(f"[Warning] Custom device {data_device} failed, fallback to default cuda device" )
             self.data_device = torch.device("cuda")
 
-        resized_image_rgb = PILtoTorch(image, resolution)
-        gt_image = resized_image_rgb[:3, ...]
-        self.alpha_mask = None
-        if resized_image_rgb.shape[0] == 4:
-            self.alpha_mask = resized_image_rgb[3:4, ...].to(self.data_device)
-        else: 
-            self.alpha_mask = torch.ones_like(resized_image_rgb[0:1, ...].to(self.data_device))
+        if image is not None:
+            resized_image_rgb = PILtoTorch(image, resolution)
+            gt_image = resized_image_rgb[:3, ...]
+            self.alpha_mask = None
+            self.original_image = gt_image.clamp(0.0, 1.0).to(self.data_device)
+            if resized_image_rgb.shape[0] == 4:
+                self.alpha_mask = resized_image_rgb[3:4, ...].to(self.data_device)
+            else: 
+                self.alpha_mask = torch.ones_like(resized_image_rgb[0:1, ...].to(self.data_device))
 
         if train_test_exp and is_test_view:
             if is_test_dataset:
@@ -54,9 +59,10 @@ class Camera(nn.Module):
             else:
                 self.alpha_mask[..., self.alpha_mask.shape[-1] // 2:] = 0
 
-        self.original_image = gt_image.clamp(0.0, 1.0).to(self.data_device)
-        self.image_width = self.original_image.shape[2]
-        self.image_height = self.original_image.shape[1]
+        # self.image_width = self.original_image.shape[2]
+        # self.image_height = self.original_image.shape[1]
+        self.image_width = resolution[0]
+        self.image_height = resolution[1]
 
         self.invdepthmap = None
         self.depth_reliable = False
@@ -105,8 +111,7 @@ class Camera(nn.Module):
     
     def get_cracked_points(self):
         # 실제로는 Cam 별로 crack point에 대한 좌표를 저장하도록 구현해야 한다.
-        return (818, 759)
-        # return (540, 960)
+        return self.cracked_points
         
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):

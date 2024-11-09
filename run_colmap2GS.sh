@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # COLMAP 프로젝트 폴더 설정
+# 실제로는 Network로부터 받은 경로로 할당을 해야 한다.
 PROJECT_DIR="/home/dannypk99/Desktop/Colmap/Testing"
 IMAGE_PATH="/home/dannypk99/Desktop/dataset/datasets/Crack/building"
 DB_PATH="$PROJECT_DIR/database.db"

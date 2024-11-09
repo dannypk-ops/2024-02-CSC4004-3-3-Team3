@@ -22,6 +22,10 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 
+import open3d as o3d
+import numpy as np
+from scene.cameras import Camera
+
 try:
     from diff_gaussian_rasterization import SparseGaussianAdam
 except:
@@ -71,7 +75,7 @@ class GaussianModel:
             self._xyz,
             self._features_dc,
             self._features_rest,
-            self._scaling,
+            self._scaling, 
             self._rotation,
             self._opacity,
             self.max_radii2D,
@@ -475,7 +479,8 @@ class GaussianModel:
     def mark_crack_points(self, cam, mark_range):
         # cam = cam_list[0]
         # crack이 있다고 판단이 되는 부분에 대한 Image Coordinate를 구함
-        w, h = cam.get_cracked_points()
+        # w, h = cam.get_cracked_points()
+        w,h = cam.get_cracked_points()[0]
         w_range, h_range = mark_range[0], mark_range[1]
 
         
@@ -489,23 +494,7 @@ class GaussianModel:
         from scipy.spatial import cKDTree
 
         means3D = self.get_xyz.detach().cpu().numpy()
-        homo_means3D = np.hstack([means3D, np.ones((means3D.shape[0], 1))])
-
-        # Cam information
-        intrinsic = cam.intrinsic
-        R, T = cam.R, cam.T
-        ref_pose = np.eye(4)
-        ref_pose[:3, :3] = R
-        ref_pose[:3, 3] = T
-
-        # world to camera
-        points_camera = (ref_pose @ homo_means3D.T).T[:, :3]
-
-        # camera to image
-        points_2D_homogeneous = (intrinsic @ points_camera.T).T
-
-        # Normalize by the third coordinate to get (x, y)
-        points_2D = points_2D_homogeneous[:, :2] / points_2D_homogeneous[:, 2].reshape(-1,1)
+        points_2D, points_camera = self.get_image_camera_coordinate_of_gaussian(cam)
 
         # (w, w + w_range), (h, h + h_range) 사이의 Point들에 대한 mask 생성.
         marked_mask = (points_2D[:, 0] >= w) & (points_2D[:, 0] <= w + w_range) & \
@@ -544,3 +533,104 @@ class GaussianModel:
         self._features_rest[mask] = feature.expand(mask.sum(), 15, 3).float().cuda()
         # self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
 
+    def get_index(self, cracked_point, cam):
+        points2D, _ = self.get_image_camera_coordinate_of_gaussian(cam)
+        points2D = torch.from_numpy(points2D).float().cuda()
+
+        # 카메라 좌표계에서 이미지 평면으로 투영 (z > 0 인 포인트만 투영)
+        indices_mask = torch.zeros((self.get_xyz.shape[0], 1), device="cuda", dtype=torch.bool)
+        indices_mask[(torch.abs(points2D[:, 0] - cracked_point[0]) <= 1) & (torch.abs(points2D[:, 1] - cracked_point[1]) <= 1)] = True
+
+        true_indices = torch.nonzero(indices_mask, as_tuple=True)[0].tolist()
+
+        # Todo: 가장 가까운 포인트의 인덱스를 반환하도록 수정
+        true_indices = [1000]
+        return true_indices  # 리스트로 반환
+
+    def novelViewRenderer(self, cam, pipe):
+        from gaussian_renderer import render
+
+        # cracked_point = cam.get_cracked_points()
+        cracked_point = cam.get_cracked_points()[0]
+        point_index = self.get_index(cracked_point, cam)
+
+        # create open3d Point Cloud object.
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(self.get_xyz.detach().cpu().numpy())
+
+        # novel view 생성
+        novel_w2c = self.create_camera_near_point(pcd, point_index, 3.0)
+        R = novel_w2c[:3, :3]
+        T = novel_w2c[:3, 3]
+
+        nvCamera = Camera((cam.depth_map.shape[0], cam.depth_map.shape[1]), colmap_id=cam.uid, R=R, T=T, 
+                  FoVx=cam.FoVx, FoVy=cam.FoVy, depth_params=None,
+                  image=None, invdepthmap=None,
+                  image_name=f"{cam.image_name}_based_novel_view", uid=cam.uid, data_device='cuda',
+                  train_test_exp=False, is_test_dataset=False, is_test_view=False)
+        
+        # rendering
+        render_pkg = render(nvCamera, self, pipe, torch.zeros(3).cuda(), use_trained_exp=False, separate_sh=False)
+
+    def create_camera_near_point(self, point_cloud, point_index, distance):
+        """
+        특정 포인트의 노멀 벡터를 기준으로 일정 거리만큼 떨어진 위치에 카메라를 생성합니다.
+        
+        Args:
+            point_cloud (o3d.geometry.PointCloud): Open3D Point Cloud 객체
+            point_index (int): 타겟 포인트의 인덱스
+            distance (float): 타겟 포인트와 카메라 간의 거리
+            
+        Returns:
+            transform_matrix (np.ndarray): 4x4 동차 변환 행렬 (world2cam)
+            camera (o3d.geometry.LineSet): 카메라 시각화 객체
+        """
+        # 노멀 벡터 계산 (필요 시)
+        if not point_cloud.has_normals():
+            point_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+
+        # 특정 포인트의 위치와 노멀 벡터 가져오기
+        target_point = np.asarray(point_cloud.points)[point_index]
+        normal_vector = np.asarray(point_cloud.normals)[point_index]
+
+        # 카메라 위치 계산
+        camera_position = (target_point + normal_vector * distance).reshape(3)
+
+        # Rotation 행렬 및 Translation 벡터 계산 (world2cam)
+        z_axis = -normal_vector / np.linalg.norm(normal_vector)  # 카메라가 타겟 포인트를 보도록 방향 설정
+        up = np.array([0, 0, 1])  # 임의의 상향 벡터
+        x_axis = np.cross(up, z_axis)
+        x_axis /= np.linalg.norm(x_axis)
+        y_axis = np.cross(z_axis, x_axis)
+
+        # Rotation 행렬 (3x3)
+        rotation_matrix = np.vstack((x_axis, y_axis, z_axis)).T
+
+        # 4x4 동차 변환 행렬 생성
+        transform_matrix = np.eye(4)  # 기본 4x4 단위 행렬
+        transform_matrix[:3, :3] = rotation_matrix
+        transform_matrix[:3, 3] = -rotation_matrix @ camera_position  # translation 적용
+
+        return transform_matrix
+    
+    def get_image_camera_coordinate_of_gaussian(self, cam):
+        means3D = self.get_xyz.detach().cpu().numpy()
+        homo_means3D = np.hstack([means3D, np.ones((means3D.shape[0], 1))])
+
+        # Cam information
+        intrinsic = cam.intrinsic
+        R, T = cam.R, cam.T
+        ref_pose = np.eye(4)
+        ref_pose[:3, :3] = R
+        ref_pose[:3, 3] = T
+
+        # world to camera
+        points_camera = (ref_pose @ homo_means3D.T).T[:, :3]
+
+        # camera to image
+        points_2D_homogeneous = (intrinsic @ points_camera.T).T
+
+        # Normalize by the third coordinate to get (x, y)
+        points_2D = points_2D_homogeneous[:, :2] / points_2D_homogeneous[:, 2].reshape(-1,1)
+
+        return points_2D, points_camera
