@@ -181,6 +181,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.exposure_optimizer.zero_grad(set_to_none = True)
                 if use_sparse_adam:
                     visible = radii > 0
+
                     gaussians.optimizer.step(visible, radii.shape[0])
                     gaussians.optimizer.zero_grad(set_to_none = True)
                 else:
@@ -281,18 +282,15 @@ if __name__ == "__main__":
     # args.save_iterations.append(args.iterations)
     
     if __debug__:
-        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/eiffel_tower/youtube05/towel"
-        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
-        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/9078"
         args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
 
-    args.densification_interval = 1000
+    args.densification_interval = 500
     args.save_iterations = [7000, 15000, 30000]
     args.save_path = "/home/dannypk99/Desktop/Colmap/ply_output"
     args.w_range = 100
     args.h_range = 100
     mark_range = [args.w_range, args.h_range]
-    max_iter = 100
+    max_iter = 10000
 
     print("Optimizing " + args.model_path)
 
