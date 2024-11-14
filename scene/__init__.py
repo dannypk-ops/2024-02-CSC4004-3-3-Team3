@@ -123,5 +123,5 @@ class Scene:
                 # else:
                 #     print("Low crack probability, not marking crack points")
             if cam.image_name[6:10] == '0017':
-                self.gaussians.mark_crack_points(cam, mark_range)
-                self.gaussians.novelViewRenderer(cam, pipe)
+                mask = self.gaussians.mark_crack_points(cam, mark_range)
+                self.gaussians.novelViewRenderer(cam, mask, pipe)

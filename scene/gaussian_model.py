@@ -25,6 +25,7 @@ from utils.general_utils import strip_symmetric, build_scaling_rotation
 import open3d as o3d
 import numpy as np
 from scene.cameras import Camera
+import random
 
 try:
     from diff_gaussian_rasterization import SparseGaussianAdam
@@ -34,9 +35,11 @@ except:
 class GaussianModel:
 
     def setup_functions(self):
-        def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation):
+        def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation, original = False):
             L = build_scaling_rotation(scaling_modifier * scaling, rotation)
             actual_covariance = L @ L.transpose(1, 2)
+            if original:
+                return actual_covariance
             symm = strip_symmetric(actual_covariance)
             return symm
         
@@ -68,6 +71,7 @@ class GaussianModel:
         self.percent_dense = 0
         self.spatial_lr_scale = 0
         self.setup_functions()
+        self.point_cloud = None
 
     def capture(self):
         return (
@@ -145,6 +149,9 @@ class GaussianModel:
     
     def get_covariance(self, scaling_modifier = 1):
         return self.covariance_activation(self.get_scaling, scaling_modifier, self._rotation)
+    
+    def get_covariance_original(self, scaling_modifier = 1):
+        return self.covariance_activation(self._scaling, scaling_modifier, self._rotation, original=True)
 
     def oneupSHdegree(self):
         if self.active_sh_degree < self.max_sh_degree:
@@ -486,8 +493,10 @@ class GaussianModel:
         
         # 해당 이미지 좌표에 대응되는 영역에 존재하는 가우시안들을 찾는다.
         # 해당 가우시안들의 색상을 변경한다. ( marking )
-        mask = self.get_marked_gaussians(cam, w, h, w_range, h_range)
+        mask, valid_indices_means3d = self.get_marked_gaussians(cam, w, h, w_range, h_range)
         self.modify_gaussians_color(mask, 'R')
+
+        return mask
     
     def get_marked_gaussians(self, cam, w, h, w_range, h_range, distance_threshold = 1.0, epsilon=1e-8):
         import open3d as o3d
@@ -514,10 +523,11 @@ class GaussianModel:
 
         # depth를 고려하여, 가까이 있는(depth가 작은) Gaussian들만을 고려한다.
         depth = points_camera[:, 2]
-        depth_mask = depth < 5.0
+        depth_mask = (depth < 3.0) & (depth > 0.0)
 
         final_mask = np.logical_and(depth_mask, valid_mask)
-        return final_mask
+        valid_indices_in_means3D = np.where(final_mask)[0]
+        return final_mask, valid_indices_in_means3D
 
     def modify_gaussians_color(self, mask, color = 'R'):
         from custom_functions import RGB2SH
@@ -531,37 +541,35 @@ class GaussianModel:
 
         self._features_dc[mask] = feature.expand(mask.sum(), 1, 3).float().cuda()
         self._features_rest[mask] = feature.expand(mask.sum(), 15, 3).float().cuda()
-        # self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
+        self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
 
-    def get_index(self, cracked_point, cam):
-        points2D, _ = self.get_image_camera_coordinate_of_gaussian(cam)
+    def get_index(self, cam, mask, margin_error = 50):
+        
+        points2D, camera_points = self.get_image_camera_coordinate_of_gaussian(cam)
         points2D = torch.from_numpy(points2D).float().cuda()
 
-        # 카메라 좌표계에서 이미지 평면으로 투영 (z > 0 인 포인트만 투영)
-        indices_mask = torch.zeros((self.get_xyz.shape[0], 1), device="cuda", dtype=torch.bool)
-        indices_mask[(torch.abs(points2D[:, 0] - cracked_point[0]) <= 1) & (torch.abs(points2D[:, 1] - cracked_point[1]) <= 1)] = True
+        true_indices = torch.nonzero(mask, as_tuple=True)[0].tolist()
 
-        true_indices = torch.nonzero(indices_mask, as_tuple=True)[0].tolist()
+        min_depth = 1000
+        point_index = 0
+        point_index_list = []
+        for index in true_indices:
+            if camera_points[index, 2] < min_depth:
+                min_depth = camera_points[index, 2]
+                point_index = index
+                point_index_list.append(index)
 
-        # Todo: 가장 가까운 포인트의 인덱스를 반환하도록 수정
-        true_indices = [1000]
-        return true_indices  # 리스트로 반환
+        return point_index_list, point_index 
 
-    def novelViewRenderer(self, cam, pipe):
+    def novelViewRenderer(self, cam, mask, pipe):
         from gaussian_renderer import render
 
-        # cracked_point = cam.get_cracked_points()
-        cracked_point = cam.get_cracked_points()[0]
-        point_index = self.get_index(cracked_point, cam)
-
         # create open3d Point Cloud object.
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(self.get_xyz.detach().cpu().numpy())
-
-        # novel view 생성
-        novel_w2c = self.create_camera_near_point(pcd, point_index, 3.0)
-        R = novel_w2c[:3, :3]
-        T = novel_w2c[:3, 3]
+        if self.point_cloud is None:
+            self.point_cloud = o3d.geometry.PointCloud()
+            self.point_cloud.points = o3d.utility.Vector3dVector(self.get_xyz.detach().cpu().numpy())
+        
+        R, T, transform_matrix = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=2.0, mask=mask)
 
         nvCamera = Camera((cam.depth_map.shape[0], cam.depth_map.shape[1]), colmap_id=cam.uid, R=R, T=T, 
                   FoVx=cam.FoVx, FoVy=cam.FoVy, depth_params=None,
@@ -571,47 +579,58 @@ class GaussianModel:
         
         # rendering
         render_pkg = render(nvCamera, self, pipe, torch.zeros(3).cuda(), use_trained_exp=False, separate_sh=False)
+        image = render_pkg["render"]
+        import matplotlib.pyplot as plt
+        plt.imshow(image.permute(1,2,0).detach().cpu().numpy())
+        plt.show()
 
-    def create_camera_near_point(self, point_cloud, point_index, distance):
+    def create_camera_near_point(self, point_cloud, ref_cam, distance, mask=None):
         """
         특정 포인트의 노멀 벡터를 기준으로 일정 거리만큼 떨어진 위치에 카메라를 생성합니다.
         
         Args:
             point_cloud (o3d.geometry.PointCloud): Open3D Point Cloud 객체
-            point_index (int): 타겟 포인트의 인덱스
+            ref_cam (np.ndarray): 기준 카메라의 회전 및 변환 정보를 담은 4x4 변환 행렬
             distance (float): 타겟 포인트와 카메라 간의 거리
-            
+            mask (np.ndarray): 관심 있는 포인트의 마스크
         Returns:
             transform_matrix (np.ndarray): 4x4 동차 변환 행렬 (world2cam)
-            camera (o3d.geometry.LineSet): 카메라 시각화 객체
         """
         # 노멀 벡터 계산 (필요 시)
-        if not point_cloud.has_normals():
-            point_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        pcd = self.compute_normals_with_pca(point_cloud)
+        # target_point = np.asarray(pcd.points)[mask].mean(0)
+        target_point = np.asarray(pcd.points)[mask][-1]
 
-        # 특정 포인트의 위치와 노멀 벡터 가져오기
-        target_point = np.asarray(point_cloud.points)[point_index]
-        normal_vector = np.asarray(point_cloud.normals)[point_index]
+        # 마스크된 포인트들의 평균 노멀 벡터를 사용
+        normal_vector = np.asarray(pcd.normals)[mask].mean(0)
 
-        # 카메라 위치 계산
-        camera_position = (target_point + normal_vector * distance).reshape(3)
+        # 카메라 위치: target_point에서 normal_vector 방향으로 distance 떨어진 위치
+        camera_position = target_point - normal_vector * distance
 
-        # Rotation 행렬 및 Translation 벡터 계산 (world2cam)
-        z_axis = -normal_vector / np.linalg.norm(normal_vector)  # 카메라가 타겟 포인트를 보도록 방향 설정
-        up = np.array([0, 0, 1])  # 임의의 상향 벡터
-        x_axis = np.cross(up, z_axis)
+        # z_axis 설정: 카메라가 target_point를 정확히 바라보도록 설정
+        z_axis = (target_point - camera_position)
+        z_axis /= np.linalg.norm(z_axis)  # 단위 벡터로 정규화
+        
+        # 기준 카메라의 상향 벡터 추출
+        ref_z_vector = ref_cam.R[:3, 2]  # ref_cam의 y축을 기준으로 상향 벡터 설정
+        ref_z_vector /= np.linalg.norm(ref_z_vector)
+
+        # x_axis와 y_axis 계산
+        x_axis = np.cross(ref_z_vector, z_axis)
         x_axis /= np.linalg.norm(x_axis)
         y_axis = np.cross(z_axis, x_axis)
 
-        # Rotation 행렬 (3x3)
+        # 3x3 회전 행렬 생성 (카메라 좌표계의 방향 설정)
         rotation_matrix = np.vstack((x_axis, y_axis, z_axis)).T
 
         # 4x4 동차 변환 행렬 생성
-        transform_matrix = np.eye(4)  # 기본 4x4 단위 행렬
+        transform_matrix = np.eye(4)
         transform_matrix[:3, :3] = rotation_matrix
-        transform_matrix[:3, 3] = -rotation_matrix @ camera_position  # translation 적용
+        transform_matrix[:3, 3] = -rotation_matrix @ camera_position  # translation 적용 (world 좌표계를 cam 좌표계로 변환)
 
-        return transform_matrix
+        # return rotation_matrix, -rotation_matrix @ camera_position
+        return rotation_matrix, -camera_position @ rotation_matrix, transform_matrix
+
     
     def get_image_camera_coordinate_of_gaussian(self, cam):
         means3D = self.get_xyz.detach().cpu().numpy()
@@ -634,3 +653,54 @@ class GaussianModel:
         points_2D = points_2D_homogeneous[:, :2] / points_2D_homogeneous[:, 2].reshape(-1,1)
 
         return points_2D, points_camera
+    
+
+    def compute_normals_with_pca(self, point_cloud, radii=[1.0], max_nn=100):
+        import numpy as np
+        import open3d as o3d
+        from sklearn.decomposition import PCA
+        """
+        다양한 반경에서 PCA를 사용하여 멀티 스케일 노멀 벡터를 계산합니다.
+        
+        Args:
+            point_cloud (o3d.geometry.PointCloud): Open3D Point Cloud 객체
+            radii (list of float): 다양한 반경을 리스트로 지정
+            max_nn (int): 각 반경에서 사용할 최대 이웃 점 개수
+            
+        Returns:
+            point_cloud (o3d.geometry.PointCloud): 최종 노멀 벡터를 가진 Point Cloud
+        """
+        # KD-Tree 생성
+        pcd_tree = o3d.geometry.KDTreeFlann(point_cloud)
+        normals = []
+
+        for i, point in enumerate(point_cloud.points):
+            multi_scale_normals = []
+
+            # 각 반경에 대해 노멀 벡터 계산
+            for radius in radii:
+                _, idx, _ = pcd_tree.search_hybrid_vector_3d(point, radius, max_nn)
+                
+                if len(idx) >= 3:  # 최소한 3개의 이웃이 필요함
+                    neighbor_points = np.asarray(point_cloud.points)[idx]
+                    
+                    # PCA로 노멀 벡터 계산
+                    pca = PCA(n_components=3)
+                    pca.fit(neighbor_points)
+                    
+                    # 가장 작은 고유값에 해당하는 고유 벡터를 노멀 벡터로 사용
+                    normal_vector = pca.components_[-1]
+                    multi_scale_normals.append(normal_vector)
+            
+            # 각 반경의 노멀 벡터를 가중 평균하여 최종 노멀을 생성 (가중치가 필요할 경우 수정 가능)
+            if multi_scale_normals:
+                averaged_normal = np.mean(multi_scale_normals, axis=0)
+                averaged_normal /= np.linalg.norm(averaged_normal)  # 정규화
+                normals.append(averaged_normal)
+            else:
+                normals.append([0, 0, 0])
+
+        # 결과를 Open3D 포맷으로 변환하여 노멀 벡터 업데이트
+        point_cloud.normals = o3d.utility.Vector3dVector(normals)
+        
+        return point_cloud
