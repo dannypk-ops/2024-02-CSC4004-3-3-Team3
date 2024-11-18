@@ -8,7 +8,8 @@
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
-
+# for detect crack
+from ultralytics import YOLO
 import os
 import torch
 from random import randint
@@ -40,7 +41,7 @@ try:
 except:
     SPARSE_ADAM_AVAILABLE = False
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, mark_range, max_iter=30000):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, mark_range, max_iter=30000, detection_model=None):
 
     if not SPARSE_ADAM_AVAILABLE and opt.optimizer_type == "sparse_adam":
         sys.exit(f"Trying to use sparse adam but it is not installed, please install the correct rasterizer using pip install [3dgs_accel].")
@@ -193,9 +194,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
 
             if iteration == max_iter:
-                # viewpoint_cam은 나중에 Labeling이 된 Image가 있는 Cmaera로 수정
-                cam_list = scene.getTrainCameras().copy()
-                scene.mark_crack_points(cam_list, mark_range, pipe)
+                viewpoint_stack = scene.getTrainCameras().copy()
+                cam_list = []
+                for camera in viewpoint_stack:
+                    if camera.cracked_points is not None:
+                        cam_list.append(camera)
+                scene.mark_crack_points(cam_list, mark_range, pipe, detection_model)
                 scene.save_marked_image(args.save_path)
 
 def prepare_output_and_logger(args):    
@@ -278,6 +282,8 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--w_range", type=int, default=10)
     parser.add_argument("--h_range", type=int, default=10)
+    parser.add_argument("--weights", type=str, default=None)
+    parser.add_argument("--detected_path", type=str, default=None)
     args = parser.parse_args(sys.argv[1:])
     # args.save_iterations.append(args.iterations)
     
@@ -285,13 +291,16 @@ if __name__ == "__main__":
         args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Crack_9066"
 
     args.densification_interval = 500
-    args.save_iterations = [7000, 15000, 30000]
+    args.save_iterations = [30000]
     args.save_path = "/home/dannypk99/Desktop/Colmap/ply_output"
     args.w_range = 100
     args.h_range = 100
     mark_range = [args.w_range, args.h_range]
-    max_iter = 10000
+    max_iter = 100
+    args.weights = 'weights/best.pt'
+    args.detected_results = 'detected_results/building'
 
+    detact_model = YOLO(args.weights)
     print("Optimizing " + args.model_path)
 
     # Initialize system state (RNG)
@@ -301,7 +310,7 @@ if __name__ == "__main__":
     if not args.disable_viewer:
         network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, mark_range, max_iter=max_iter)
+    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, mark_range, max_iter=max_iter, detection_model=detact_model)
 
     # All done
     print("\nTraining complete.")

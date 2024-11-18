@@ -493,7 +493,7 @@ class GaussianModel:
         
         # 해당 이미지 좌표에 대응되는 영역에 존재하는 가우시안들을 찾는다.
         # 해당 가우시안들의 색상을 변경한다. ( marking )
-        mask, valid_indices_means3d = self.get_marked_gaussians(cam, w, h, w_range, h_range)
+        mask = self.get_marked_gaussians(cam, w, h, w_range, h_range)
         self.modify_gaussians_color(mask, 'R')
 
         return mask
@@ -526,8 +526,8 @@ class GaussianModel:
         depth_mask = (depth < 3.0) & (depth > 0.0)
 
         final_mask = np.logical_and(depth_mask, valid_mask)
-        valid_indices_in_means3D = np.where(final_mask)[0]
-        return final_mask, valid_indices_in_means3D
+
+        return final_mask
 
     def modify_gaussians_color(self, mask, color = 'R'):
         from custom_functions import RGB2SH
@@ -569,7 +569,7 @@ class GaussianModel:
             self.point_cloud = o3d.geometry.PointCloud()
             self.point_cloud.points = o3d.utility.Vector3dVector(self.get_xyz.detach().cpu().numpy())
         
-        R, T, transform_matrix = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=2.0, mask=mask)
+        R, T = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=2.0, mask=mask)
 
         nvCamera = Camera((cam.depth_map.shape[0], cam.depth_map.shape[1]), colmap_id=cam.uid, R=R, T=T, 
                   FoVx=cam.FoVx, FoVy=cam.FoVy, depth_params=None,
@@ -580,9 +580,9 @@ class GaussianModel:
         # rendering
         render_pkg = render(nvCamera, self, pipe, torch.zeros(3).cuda(), use_trained_exp=False, separate_sh=False)
         image = render_pkg["render"]
-        import matplotlib.pyplot as plt
-        plt.imshow(image.permute(1,2,0).detach().cpu().numpy())
-        plt.show()
+        # import matplotlib.pyplot as plt
+        # plt.imshow(image.permute(1,2,0).detach().cpu().numpy())
+        # plt.show()
 
     def create_camera_near_point(self, point_cloud, ref_cam, distance, mask=None):
         """
@@ -615,10 +615,19 @@ class GaussianModel:
         ref_z_vector = ref_cam.R[:3, 2]  # ref_cam의 y축을 기준으로 상향 벡터 설정
         ref_z_vector /= np.linalg.norm(ref_z_vector)
 
+        ref_y_vector = ref_cam.R[:3, 1]
+        ref_x_vector = ref_cam.R[:3, 0]
+
         # x_axis와 y_axis 계산
-        x_axis = np.cross(ref_z_vector, z_axis)
-        x_axis /= np.linalg.norm(x_axis)
-        y_axis = np.cross(z_axis, x_axis)
+        y_axis = np.cross(z_axis, ref_z_vector)
+
+        if np.dot(y_axis, ref_y_vector) < 0:
+            y_axis = -y_axis
+        y_axis /= np.linalg.norm(y_axis)
+
+        x_axis = np.cross(z_axis, y_axis)
+        if np.dot(x_axis, ref_x_vector) < 0:
+            x_axis = -x_axis
 
         # 3x3 회전 행렬 생성 (카메라 좌표계의 방향 설정)
         rotation_matrix = np.vstack((x_axis, y_axis, z_axis)).T
@@ -629,7 +638,7 @@ class GaussianModel:
         transform_matrix[:3, 3] = -rotation_matrix @ camera_position  # translation 적용 (world 좌표계를 cam 좌표계로 변환)
 
         # return rotation_matrix, -rotation_matrix @ camera_position
-        return rotation_matrix, -camera_position @ rotation_matrix, transform_matrix
+        return rotation_matrix, -camera_position @ rotation_matrix
 
     
     def get_image_camera_coordinate_of_gaussian(self, cam):

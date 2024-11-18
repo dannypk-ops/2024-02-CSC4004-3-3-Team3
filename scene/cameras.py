@@ -20,7 +20,8 @@ class Camera(nn.Module):
     def __init__(self, resolution, colmap_id, R, T, FoVx, FoVy, depth_params, image, invdepthmap,
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda",
-                 train_test_exp = False, is_test_dataset = False, is_test_view = False
+                 train_test_exp = False, is_test_dataset = False, is_test_view = False,
+                 crack_points = None
                  ):
         super(Camera, self).__init__()
 
@@ -34,7 +35,10 @@ class Camera(nn.Module):
         self.depth_map = torch.zeros(resolution[0], resolution[1]).to(data_device)
         
         # crack Point Information
-        self.cracked_points = [(818, 759)]
+        if crack_points is not None and crack_points != []:
+            self.cracked_points = crack_points
+        else:
+            self.cracked_points = None
 
         try:
             self.data_device = torch.device(data_device)
