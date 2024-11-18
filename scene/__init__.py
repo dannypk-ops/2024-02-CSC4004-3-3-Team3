@@ -41,7 +41,7 @@ class Scene:
         self.test_cameras = {}
 
         if os.path.exists(os.path.join(args.source_path, "sparse")):
-            scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.depths, args.eval, args.train_test_exp)
+            scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.depths, args.eval, args.train_test_exp, args.detected_results)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
             scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.depths, args.eval)
@@ -110,7 +110,7 @@ class Scene:
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
     
-    def mark_crack_points(self, cam_list, mark_range, pipe):
+    def mark_crack_points(self, cam_list, mark_range, pipe, detection_model):
         # 실험을 위하여 cam_list[0]만 사용
         # cam_list = [cam_list[0]]
         mark_range = [100, 424]

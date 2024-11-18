@@ -49,6 +49,8 @@ class ModelParams(ParamGroup):
         self.sh_degree = 3
         self._source_path = ""
         self._model_path = ""
+        self.yolo_path = ""
+        self.detected_results = ""
         self._images = "images"
         self._depths = ""
         self._resolution = -1
@@ -61,6 +63,8 @@ class ModelParams(ParamGroup):
     def extract(self, args):
         g = super().extract(args)
         g.source_path = os.path.abspath(g.source_path)
+        g.yolo_path = os.path.abspath(args.weights)
+        g.detected_results = os.path.abspath(args.detected_results)
         return g
 
 class PipelineParams(ParamGroup):
