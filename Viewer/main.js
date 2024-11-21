@@ -920,7 +920,7 @@ async function main() {
     let activeKeys = [];
     let currentCameraIndex = 0;
 
-    window.addEventListener("keydown", (e) => {
+    window.addEventListener("keydown", (e) => { //키보드 키가 눌릴 때 호출
         // if (document.activeElement != document.body) return;
         carousel = false;
         if (!activeKeys.includes(e.code)) activeKeys.push(e.code);
@@ -946,19 +946,19 @@ async function main() {
                     viewMatrix.map((k) => Math.round(k * 100) / 100),
                 );
             camid.innerText = "";
-        } else if (e.code === "KeyP") {
+        } else if (e.code === "KeyP") { 
             carousel = true;
             camid.innerText = "";
         }
     });
-    window.addEventListener("keyup", (e) => {
+    window.addEventListener("keyup", (e) => { //키보드 키가 떼질 때 호출
         activeKeys = activeKeys.filter((k) => k !== e.code);
     });
     window.addEventListener("blur", () => {
         activeKeys = [];
     });
 
-    window.addEventListener(
+    window.addEventListener( // 마우스 휠 입력 처리
         "wheel",
         (e) => {
             carousel = false;
@@ -1003,7 +1003,7 @@ async function main() {
     );
 
     let startX, startY, down;
-    canvas.addEventListener("mousedown", (e) => {
+    canvas.addEventListener("mousedown", (e) => { // 마우스 클릭(좌클릭/우클릭) 처리
         carousel = false;
         e.preventDefault();
         startX = e.clientX;
@@ -1018,7 +1018,7 @@ async function main() {
         down = 2;
     });
 
-    canvas.addEventListener("mousemove", (e) => {
+    canvas.addEventListener("mousemove", (e) => { // 마우스 이동 처리
         e.preventDefault();
         if (down == 1) {
             let inv = invert4(viewMatrix);
@@ -1054,7 +1054,7 @@ async function main() {
             startY = e.clientY;
         }
     });
-    canvas.addEventListener("mouseup", (e) => {
+    canvas.addEventListener("mouseup", (e) => { // 마우스 버튼 떼질 때 초기화
         e.preventDefault();
         down = false;
         startX = 0;
@@ -1063,16 +1063,16 @@ async function main() {
 
     let altX = 0,
         altY = 0;
-    canvas.addEventListener(
+    canvas.addEventListener( // 터치 시작 처리
         "touchstart",
         (e) => {
             e.preventDefault();
-            if (e.touches.length === 1) {
+            if (e.touches.length === 1) { // 싱글 터치: 카메라 회전 준비
                 carousel = false;
                 startX = e.touches[0].clientX;
                 startY = e.touches[0].clientY;
                 down = 1;
-            } else if (e.touches.length === 2) {
+            } else if (e.touches.length === 2) { // 멀티 터치: 확대/축소 및 이동 준비
                 // console.log('beep')
                 carousel = false;
                 startX = e.touches[0].clientX;
@@ -1084,7 +1084,7 @@ async function main() {
         },
         { passive: false },
     );
-    canvas.addEventListener(
+    canvas.addEventListener( // 터치 이동 처리
         "touchmove",
         (e) => {
             e.preventDefault();
@@ -1149,7 +1149,7 @@ async function main() {
         },
         { passive: false },
     );
-    canvas.addEventListener(
+    canvas.addEventListener( // 터치 끝났을 때 초기화
         "touchend",
         (e) => {
             e.preventDefault();
@@ -1167,13 +1167,13 @@ async function main() {
     let avgFps = 0;
     let start = 0;
 
-    window.addEventListener("gamepadconnected", (e) => {
+    window.addEventListener("gamepadconnected", (e) => { // 게임 패드 연결 이벤트 처리
         const gp = navigator.getGamepads()[e.gamepad.index];
         console.log(
             `Gamepad connected at index ${gp.index}: ${gp.id}. It has ${gp.buttons.length} buttons and ${gp.axes.length} axes.`,
         );
     });
-    window.addEventListener("gamepaddisconnected", (e) => {
+    window.addEventListener("gamepaddisconnected", (e) => { // 게임 패드 연결 해제 이벤트 처리
         console.log("Gamepad disconnected");
     });
 
@@ -1186,32 +1186,32 @@ async function main() {
             activeKeys.includes("ShiftLeft") ||
             activeKeys.includes("ShiftRight");
 
-        if (activeKeys.includes("ArrowUp")) {
+        if (activeKeys.includes("ArrowUp")) { // 위 방향키 눌릴 때
             if (shiftKey) {
                 inv = translate4(inv, 0, -0.03, 0);
             } else {
                 inv = translate4(inv, 0, 0, 0.1);
             }
         }
-        if (activeKeys.includes("ArrowDown")) {
+        if (activeKeys.includes("ArrowDown")) { // 아래 방향키 눌릴 때
             if (shiftKey) {
                 inv = translate4(inv, 0, 0.03, 0);
             } else {
                 inv = translate4(inv, 0, 0, -0.1);
             }
         }
-        if (activeKeys.includes("ArrowLeft"))
+        if (activeKeys.includes("ArrowLeft")) // 왼쪽 방향키 눌릴 때
             inv = translate4(inv, -0.03, 0, 0);
         //
-        if (activeKeys.includes("ArrowRight"))
+        if (activeKeys.includes("ArrowRight")) // 오른쪽 방향키 눌릴 때
             inv = translate4(inv, 0.03, 0, 0);
         // inv = rotate4(inv, 0.01, 0, 1, 0);
-        if (activeKeys.includes("KeyA")) inv = rotate4(inv, -0.01, 0, 1, 0);
-        if (activeKeys.includes("KeyD")) inv = rotate4(inv, 0.01, 0, 1, 0);
-        if (activeKeys.includes("KeyQ")) inv = rotate4(inv, 0.01, 0, 0, 1);
-        if (activeKeys.includes("KeyE")) inv = rotate4(inv, -0.01, 0, 0, 1);
-        if (activeKeys.includes("KeyW")) inv = rotate4(inv, 0.005, 1, 0, 0);
-        if (activeKeys.includes("KeyS")) inv = rotate4(inv, -0.005, 1, 0, 0);
+        if (activeKeys.includes("KeyA")) inv = rotate4(inv, -0.01, 0, 1, 0); // 왼쪽 회전
+        if (activeKeys.includes("KeyD")) inv = rotate4(inv, 0.01, 0, 1, 0); // 오른쪽 회전
+        if (activeKeys.includes("KeyQ")) inv = rotate4(inv, 0.01, 0, 0, 1); // 반시계 방향 회전
+        if (activeKeys.includes("KeyE")) inv = rotate4(inv, -0.01, 0, 0, 1); // 시계 방향 회전
+        if (activeKeys.includes("KeyW")) inv = rotate4(inv, 0.005, 1, 0, 0); // 위로 회전
+        if (activeKeys.includes("KeyS")) inv = rotate4(inv, -0.005, 1, 0, 0); // 아래로 회전
 
         const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
         let isJumping = activeKeys.includes("Space");
