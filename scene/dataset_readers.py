@@ -33,6 +33,7 @@ class CameraInfo(NamedTuple):
     image_path: str
     image_name: str
     depth_path: str
+    normal_path: str
     width: int
     height: int
     is_test: bool
@@ -69,7 +70,7 @@ def getNerfppNorm(cam_info):
 
     return {"translate": translate, "radius": radius}
 
-def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_folder, depths_folder, test_cam_names_list, cracked_information=None):
+def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, source_path, images_folder, depths_folder, test_cam_names_list, cracked_information=None):
     cam_infos = []
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
@@ -106,12 +107,15 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
             except:
                 print("\n", key, "not found in depths_params")
 
+        depth_path = os.path.join(source_path, f"stereo/depth_maps/{extr.name}.geometric.bin")
+        normal_path = os.path.join(source_path, f"stereo/normal_maps/{extr.name}.geometric.bin")  
         image_path = os.path.join(images_folder, extr.name)
         image_name = extr.name
-        depth_path = os.path.join(depths_folder, f"{extr.name[:-n_remove]}.png") if depths_folder != "" else ""
+        # depth_path = os.path.join(depths_folder, f"{extr.name[:-n_remove]}.png") if depths_folder != "" else ""
+
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, depth_params=depth_params,
-                              image_path=image_path, image_name=image_name, depth_path=depth_path,
+                              image_path=image_path, image_name=image_name, depth_path=depth_path, normal_path=normal_path,
                               width=width, height=height, is_test=image_name in test_cam_names_list, crack_points=cracked_information)
         cam_infos.append(cam_info)
 
@@ -215,6 +219,7 @@ def readColmapSceneInfo(path, images, depths, eval, train_test_exp, detected_res
     reading_dir = "images" if images == None else images
     cam_infos_unsorted = readColmapCameras(
         cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, depths_params=depths_params,
+        source_path = path,
         images_folder=os.path.join(path, reading_dir), 
         depths_folder=os.path.join(path, depths) if depths != "" else "", test_cam_names_list=test_cam_names_list,
         cracked_information=result)

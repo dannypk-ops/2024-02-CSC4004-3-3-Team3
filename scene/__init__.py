@@ -110,18 +110,28 @@ class Scene:
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
     
-    def mark_crack_points(self, cam_list, mark_range, pipe, detection_model):
-        # 실험을 위하여 cam_list[0]만 사용
-        # cam_list = [cam_list[0]]
-        mark_range = [100, 424]
+    def save_numpy_img(self, image, path):
+        from PIL import Image
+        import numpy as np
+        image = (image * 255).astype(np.uint8)
+        image = Image.fromarray(image)
+        image.save(path)
+
+    def mark_crack_points(self, cam_list, pipe, detection_model, novel=False):
         for cam in cam_list:
-            # if cam.crack_probability < 0.7:
-            # if True:
-                # if self.gaussians.novelViewRenderer(cam) > 0.5:
-                # self.gaussians.novelViewRenderer(cam, pipe)
-                # self.gaussians.mark_crack_points(cam, mark_range)
-                # else:
-                #     print("Low crack probability, not marking crack points")
-            if cam.image_name[6:10] == '0017':
-                mask = self.gaussians.mark_crack_points(cam, mark_range)
-                self.gaussians.novelViewRenderer(cam, mask, pipe)
+            if float(cam.cracked_points[0]['probability']) < 0.7:
+                mask = self.gaussians.get_marked_gaussians(cam)
+                if mask.sum() > 0:
+                    if novel:
+                        novelview_image = self.gaussians.novelViewRenderer(cam, mask, pipe)
+                        path = f"/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/novel_view_image/novelview_image_{cam.image_name[:-4]}.jpg"
+                        self.save_numpy_img(novelview_image, f"{path}.jpg")
+                        new_prob = 0 if detection_model(f"{path}.jpg")[0].boxes.conf.numel() == 0 else detection_model(f"{path}.jpg")[0].boxes.conf[0]
+                        if new_prob > 0.5:
+                            self.gaussians.mark_crack_points(cam, modify=True, color='R')
+                        else:
+                            print("Crack dismissed...")
+                    else:
+                        self.gaussians.mark_crack_points(cam, modify=True, color='R')
+
+

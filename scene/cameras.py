@@ -21,7 +21,8 @@ class Camera(nn.Module):
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda",
                  train_test_exp = False, is_test_dataset = False, is_test_view = False,
-                 crack_points = None
+                 crack_points = None,
+                 depth_path = None, normal_path=None
                  ):
         super(Camera, self).__init__()
 
@@ -32,8 +33,10 @@ class Camera(nn.Module):
         self.FoVx = FoVx
         self.FoVy = FoVy
         self.image_name = image_name
-        self.depth_map = torch.zeros(resolution[0], resolution[1]).to(data_device)
-        
+        if depth_path is not None and normal_path is not None:
+            self.depth_map = self.read_array(depth_path)
+            self.normal_map = self.read_array(normal_path)
+
         # crack Point Information
         if crack_points is not None and crack_points != []:
             self.cracked_points = crack_points
@@ -117,6 +120,31 @@ class Camera(nn.Module):
         # 실제로는 Cam 별로 crack point에 대한 좌표를 저장하도록 구현해야 한다.
         return self.cracked_points
         
+    def read_array(self, path):
+        """Reads a depth or normal map from a binary file."""
+        with open(path, "rb") as fid:
+            # Read width, height, and channels (header info)
+            width, height, channels = np.genfromtxt(
+                fid, delimiter="&", max_rows=1, usecols=(0, 1, 2), dtype=int
+            )
+            # Skip the header to reach the binary data
+            fid.seek(0)
+            num_delimiter = 0
+            while True:
+                byte = fid.read(1)
+                if byte == b"&":
+                    num_delimiter += 1
+                    if num_delimiter >= 3:
+                        break
+            
+            # Read the binary data as a float32 array
+            array = np.fromfile(fid, np.float32)
+
+        # Reshape and reorder the array
+        array = array.reshape((width, height, channels), order="F")
+        return np.transpose(array, (1, 0, 2)).squeeze()
+
+
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):
         self.image_width = width
