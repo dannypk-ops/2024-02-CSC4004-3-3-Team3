@@ -140,3 +140,12 @@ def vis_gs(pc, cam=None, save=False, mask=None):
         o3d.io.write_point_cloud("test.ply", pcd)
         
     o3d.visualization.draw_geometries([pcd])
+
+
+def save_numpy_img(image, path):
+    import numpy as np
+    from PIL import Image
+
+    image = (image * 255).astype(np.uint8)
+    image = Image.fromarray(image)
+    image.save(path)

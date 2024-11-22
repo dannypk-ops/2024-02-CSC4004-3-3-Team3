@@ -483,38 +483,52 @@ class GaussianModel:
         self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.denom[update_filter] += 1
 
-    def mark_crack_points(self, cam, mark_range):
-        # cam = cam_list[0]
-        # crack이 있다고 판단이 되는 부분에 대한 Image Coordinate를 구함
-        # w, h = cam.get_cracked_points()
-        w,h = cam.get_cracked_points()[0]
-        w_range, h_range = mark_range[0], mark_range[1]
-
-        
+    def mark_crack_points(self, cam, modify = False, color = 'R'):
         # 해당 이미지 좌표에 대응되는 영역에 존재하는 가우시안들을 찾는다.
         # 해당 가우시안들의 색상을 변경한다. ( marking )
-        mask = self.get_marked_gaussians(cam, w, h, w_range, h_range)
-        self.modify_gaussians_color(mask, 'R')
+        mask = self.get_marked_gaussians(cam)
+
+        if modify:
+            self.modify_gaussians_color(mask, color)
 
         return mask
     
-    def get_marked_gaussians(self, cam, w, h, w_range, h_range, distance_threshold = 1.0, epsilon=1e-8):
+    def get_marked_gaussians(self, cam, distance_threshold = 0.7, epsilon=1e-8):
         import open3d as o3d
         from scipy.spatial import cKDTree
 
         means3D = self.get_xyz.detach().cpu().numpy()
         points_2D, points_camera = self.get_image_camera_coordinate_of_gaussian(cam)
 
-        # (w, w + w_range), (h, h + h_range) 사이의 Point들에 대한 mask 생성.
-        marked_mask = (points_2D[:, 0] >= w) & (points_2D[:, 0] <= w + w_range) & \
-                      (points_2D[:, 1] >= h) & (points_2D[:, 1] <= h + h_range)
+        cracked_points = cam.cracked_points[0]['pixels']
+        cracked_points = np.array(cracked_points)
+
+        min_x, min_y = cracked_points.min(0)
+        max_x, max_y = cracked_points.max(0)
+
+        mark_range = (max_x - min_x, max_y - min_y)
+        base_pixel = (min_x, min_y)
+
+        padding = 30
+
+        # 범위 설정
+        x_range = (base_pixel[0] - padding, base_pixel[0] + mark_range[0] + padding)
+        y_range = (base_pixel[1] - padding, base_pixel[1] + mark_range[1] + padding)
+
+        marked_mask = np.zeros(points_2D.shape[0], dtype=bool)
+
+        # 범위 내부에 있는 mask 생성
+        marked_mask = (
+            (points_2D[:, 0] >= x_range[0]) & (points_2D[:, 0] <= x_range[1]) &
+            (points_2D[:, 1] >= y_range[0]) & (points_2D[:, 1] <= y_range[1])
+        )   
 
         # 동일한 pixel에 해당하는 가우시안들에 대해서, density가 threshold보다 높은 애들만 masking하는 mask 생성.
         target_means3D = means3D[marked_mask]
         tree = cKDTree(means3D)
         counts = np.array([len(tree.query_ball_point(point, distance_threshold)) for point in target_means3D])
         
-        valid_indices = np.where(counts >= 1000)[0]
+        valid_indices = np.where(counts >= 500)[0]
         marked_indices = np.where(marked_mask)[0]
         valid_indices_in_means3D = marked_indices[valid_indices]
 
@@ -523,8 +537,20 @@ class GaussianModel:
 
         # depth를 고려하여, 가까이 있는(depth가 작은) Gaussian들만을 고려한다.
         depth = points_camera[:, 2]
-        depth_mask = (depth < 3.0) & (depth > 0.0)
+        depth_map = cam.depth_map[cracked_points[:,0], cracked_points[:,1]]
+        valid_num = np.sum(depth_map != 0)
 
+        # 유효한 depth value의 mean
+        if valid_num != 0:
+            depth_value = depth_map.sum() / valid_num
+        else:
+            depth_value = 0
+            
+        if depth_value == 0:
+            print('No valid depth')
+            return np.array([])
+        
+        depth_mask = np.abs(depth - depth_value) < 1.0
         final_mask = np.logical_and(depth_mask, valid_mask)
 
         return final_mask
@@ -569,20 +595,18 @@ class GaussianModel:
             self.point_cloud = o3d.geometry.PointCloud()
             self.point_cloud.points = o3d.utility.Vector3dVector(self.get_xyz.detach().cpu().numpy())
         
-        R, T = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=2.0, mask=mask)
+        R, T = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=1.0, mask=mask)
 
         nvCamera = Camera((cam.depth_map.shape[0], cam.depth_map.shape[1]), colmap_id=cam.uid, R=R, T=T, 
                   FoVx=cam.FoVx, FoVy=cam.FoVy, depth_params=None,
-                  image=None, invdepthmap=None,
+                  image=None, invdepthmap=None, depth_path=None, normal_path=None,
                   image_name=f"{cam.image_name}_based_novel_view", uid=cam.uid, data_device='cuda',
                   train_test_exp=False, is_test_dataset=False, is_test_view=False)
         
         # rendering
         render_pkg = render(nvCamera, self, pipe, torch.zeros(3).cuda(), use_trained_exp=False, separate_sh=False)
-        image = render_pkg["render"]
-        # import matplotlib.pyplot as plt
-        # plt.imshow(image.permute(1,2,0).detach().cpu().numpy())
-        # plt.show()
+        
+        return render_pkg["render"].detach().cpu().numpy().transpose(1,2,0)
 
     def create_camera_near_point(self, point_cloud, ref_cam, distance, mask=None):
         """
@@ -597,7 +621,11 @@ class GaussianModel:
             transform_matrix (np.ndarray): 4x4 동차 변환 행렬 (world2cam)
         """
         # 노멀 벡터 계산 (필요 시)
-        pcd = self.compute_normals_with_pca(point_cloud)
+        if point_cloud.has_normals():
+            pcd = point_cloud
+        else:   
+            pcd = self.compute_normals_with_pca(point_cloud)
+
         # target_point = np.asarray(pcd.points)[mask].mean(0)
         target_point = np.asarray(pcd.points)[mask][-1]
 
@@ -661,7 +689,7 @@ class GaussianModel:
         # Normalize by the third coordinate to get (x, y)
         points_2D = points_2D_homogeneous[:, :2] / points_2D_homogeneous[:, 2].reshape(-1,1)
 
-        return points_2D, points_camera
+        return points_2D.astype(int), points_camera
     
 
     def compute_normals_with_pca(self, point_cloud, radii=[1.0], max_nn=100):
