@@ -1177,6 +1177,35 @@ async function main() {
         console.log("Gamepad disconnected");
     });
 
+    // 화면상의 버튼 입력 처리
+    document.getElementById("arrow-up").addEventListener("mousedown", () => {
+        if (!activeKeys.includes("ArrowUp")) activeKeys.push("ArrowUp");
+    });
+    document.getElementById("arrow-up").addEventListener("mouseup", () => {
+        activeKeys = activeKeys.filter((key) => key !== "ArrowUp");
+    });
+    
+    document.getElementById("arrow-down").addEventListener("mousedown", () => {
+        if (!activeKeys.includes("ArrowDown")) activeKeys.push("ArrowDown");
+    });
+    document.getElementById("arrow-down").addEventListener("mouseup", () => {
+        activeKeys = activeKeys.filter((key) => key !== "ArrowDown");
+    });
+    
+    document.getElementById("arrow-left").addEventListener("mousedown", () => {
+        if (!activeKeys.includes("KeyA")) activeKeys.push("KeyA");
+    });
+    document.getElementById("arrow-left").addEventListener("mouseup", () => {
+        activeKeys = activeKeys.filter((key) => key !== "KeyA");
+    });
+    
+    document.getElementById("arrow-right").addEventListener("mousedown", () => {
+        if (!activeKeys.includes("KeyD")) activeKeys.push("KeyD");
+    });
+    document.getElementById("arrow-right").addEventListener("mouseup", () => {
+        activeKeys = activeKeys.filter((key) => key !== "KeyD");
+    });
+
     let leftGamepadTrigger, rightGamepadTrigger;
 
     const frame = (now) => {

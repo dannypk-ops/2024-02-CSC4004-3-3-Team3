@@ -212,6 +212,7 @@ body.nohf #progress, body.nohf .cube-face {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     cursor: pointer;
+    z-index: 10; /* 버튼을 다른 요소 위로 배치 */
 }
 
 .arrow:active {
