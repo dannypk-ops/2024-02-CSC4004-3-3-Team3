@@ -114,6 +114,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg, use_trained_exp=dataset.train_test_exp, separate_sh=SPARSE_ADAM_AVAILABLE)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
 
+        if viewpoint_cam.image_name == 'frame_0055.jpg':
+            # image = image.detach().cpu().numpy().transpose(1, 2, 0)
+            import matplotlib.pyplot as plt
+
         if viewpoint_cam.alpha_mask is not None:
             alpha_mask = viewpoint_cam.alpha_mask.cuda()
             image *= alpha_mask
@@ -281,25 +285,26 @@ if __name__ == "__main__":
     parser.add_argument('--disable_viewer', action='store_true', default=False)
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    parser.add_argument("--w_range", type=int, default=10)
-    parser.add_argument("--h_range", type=int, default=10)
     parser.add_argument("--weights", type=str, default=None)
     parser.add_argument("--save_path", type=str, default=None)
     args = parser.parse_args(sys.argv[1:])
     # args.save_iterations.append(args.iterations)
     
     if __debug__:
-        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/buildings"
-        args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/colmap/Stairs"
+        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/building"
+        args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/stairs"
         args.weights = 'weights/best.pt'
+        # args.detected_results = 'detected_results/for_origin'
         # args.detected_results = 'detected_results/building'
-        args.detected_results = 'detected_results/stairs'
-        args.novelview_refinement = False
+        # args.detected_results = 'detected_results/selected_building'
+        # args.detected_results = 'detected_results/stairs'
+        args.detected_results = 'detected_results/selected_stairs'
+        args.novelview_refinement = True
 
     args.densification_interval = 500
-    args.save_iterations = [7000, 15000, 30000]
+    args.save_iterations = [15000, 30000]
     args.save_path = "/home/dannypk99/Desktop/Colmap/ply_output"
-    max_iter = 30000
+    max_iter = 20000
 
     detact_model = YOLO(args.weights)
     print("Optimizing " + args.model_path)
