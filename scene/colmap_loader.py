@@ -24,6 +24,7 @@ Point3D = collections.namedtuple(
 CAMERA_MODELS = {
     CameraModel(model_id=0, model_name="SIMPLE_PINHOLE", num_params=3),
     CameraModel(model_id=1, model_name="PINHOLE", num_params=4),
+    # CameraModel(model_id=1, model_name="OPENCV", num_params=8),
     CameraModel(model_id=2, model_name="SIMPLE_RADIAL", num_params=4),
     CameraModel(model_id=3, model_name="RADIAL", num_params=5),
     CameraModel(model_id=4, model_name="OPENCV", num_params=8),
@@ -239,6 +240,7 @@ def read_intrinsics_binary(path_to_model_file):
                                         params=np.array(params))
         assert len(cameras) == num_cameras
     return cameras
+
 
 
 def read_extrinsics_text(path):

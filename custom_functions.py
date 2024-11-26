@@ -4,6 +4,12 @@ import open3d as o3d
 import torch
 import numpy as np
 
+
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
+
+
 C0 = 0.28209479177387814
 C1 = 0.4886025119029199
 C2 = [

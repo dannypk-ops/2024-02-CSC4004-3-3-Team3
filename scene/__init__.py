@@ -119,19 +119,26 @@ class Scene:
 
     def mark_crack_points(self, cam_list, pipe, detection_model, novel=False):
         for cam in cam_list:
-            if float(cam.cracked_points[0]['probability']) < 0.7:
-                mask = self.gaussians.get_marked_gaussians(cam)
-                if mask.sum() > 0:
+            # if float(cam.cracked_points[0]['probability']) < 0.7:
+            if float(cam.cracked_points[0]['probability']) < 1.0:
+                mask = self.gaussians.mark_crack_points(cam)
+                if mask.sum() != 0:
                     if novel:
                         novelview_image = self.gaussians.novelViewRenderer(cam, mask, pipe)
-                        path = f"/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/novel_view_image/novelview_image_{cam.image_name[:-4]}.jpg"
+                        # Saving novel view image
+                        # path = f"/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/novel_view_image/building/novelview_image_{cam.image_name[:-4]}.jpg"
+                        path = f"/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/novel_view_image/stairs/novelview_image_{cam.image_name[:-4]}"
                         self.save_numpy_img(novelview_image, f"{path}.jpg")
                         new_prob = 0 if detection_model(f"{path}.jpg")[0].boxes.conf.numel() == 0 else detection_model(f"{path}.jpg")[0].boxes.conf[0]
-                        if new_prob > 0.5:
-                            self.gaussians.mark_crack_points(cam, modify=True, color='R')
-                        else:
-                            print("Crack dismissed...")
-                    else:
-                        self.gaussians.mark_crack_points(cam, modify=True, color='R')
+                        # self.gaussians.mark_crack_points(cam, modify=True, color='R')
+                            # if new_prob > 0.5:
+                            #     self.gaussians.mark_crack_points(cam, modify=True, color='R')
+                            # else:
+                            #     print("Crack dismissed...")
+                    # else:
+                        # self.gaussians.mark_crack_points(cam, modify=True, color='R')
+            # else:
+                # self.gaussians.mark_crack_points(cam, modify=True, color='R')
+                # self.gaussians.saving_marked_image(cam, pipe)
 
 

@@ -64,6 +64,7 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
     frame_number = cam_info.image_name.split("_")[1].split(".")[0]
     crack_information = cam_info.crack_points.get(frame_number, None)
 
+
     return Camera(resolution, colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, depth_params=cam_info.depth_params,
                   image=image, invdepthmap=None, depth_path=cam_info.depth_path, normal_path=cam_info.normal_path,
