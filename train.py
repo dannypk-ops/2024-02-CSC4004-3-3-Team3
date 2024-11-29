@@ -291,19 +291,16 @@ if __name__ == "__main__":
     # args.save_iterations.append(args.iterations)
     
     if __debug__:
-        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/building"
-        args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/stairs"
-        args.weights = 'weights/best.pt'
-        # args.detected_results = 'detected_results/for_origin'
-        # args.detected_results = 'detected_results/building'
-        # args.detected_results = 'detected_results/selected_building'
-        # args.detected_results = 'detected_results/stairs'
-        args.detected_results = 'detected_results/selected_stairs'
-        args.novelview_refinement = True
+        args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/building"
+        # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/stairs"
+        args.detected_results = 'detected_results/selected_building'
+        # args.detected_results = 'detected_results/selected_stairs'
+        args.novelview_refinement = False
 
     args.densification_interval = 500
     args.save_iterations = [15000, 30000]
     args.save_path = "/home/dannypk99/Desktop/Colmap/ply_output"
+    args.weights = 'weights/best.pt'
     max_iter = 20000
 
     detact_model = YOLO(args.weights)

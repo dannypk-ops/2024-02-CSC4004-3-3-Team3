@@ -117,7 +117,6 @@ class Camera(nn.Module):
         self.camera_center = self.world_view_transform.inverse()[3, :3]
     
     def get_cracked_points(self):
-        # 실제로는 Cam 별로 crack point에 대한 좌표를 저장하도록 구현해야 한다.
         return self.cracked_points
         
     def read_array(self, path):
