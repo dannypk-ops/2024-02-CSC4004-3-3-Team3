@@ -579,7 +579,7 @@ class GaussianModel:
 
         self._features_dc[mask] = feature.expand(mask.sum(), 1, 3).float().cuda()
         self._features_rest[mask] = feature.expand(mask.sum(), 15, 3).float().cuda()
-        self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
+        # self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
 
     def novelViewRenderer(self, cam, mask, pipe):
         from gaussian_renderer import render
@@ -629,12 +629,6 @@ class GaussianModel:
 
         if np.dot(normal_vector, target_point) < 0:  # 노멀 방향 확인 및 조정
             normal_vector = -normal_vector
-        
-        # points_2D, points_camera = self.get_image_camera_coordinate_of_gaussian(ref_cam)
-        # mean_mask = points_2D[mask].mean(0).astype(np.int32)
-        # normal_vector = ref_cam.normal_map[mean_mask[1], mean_mask[0]]
-
-        # using MVS result normal vector 
 
         # 카메라 위치: target_point에서 normal_vector 방향으로 distance 떨어진 위치
         camera_position = target_point - normal_vector * distance
@@ -756,7 +750,7 @@ class GaussianModel:
     
     def saving_projected_image(self, cam):
         from PIL import Image
-        from custom_functions import sh2RGB
+        from custom_util import sh2RGB
 
         width = cam.depth_map.shape[1]
         height = cam.depth_map.shape[0]
