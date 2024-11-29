@@ -159,7 +159,7 @@ def readColmapSceneInfo(path, images, depths, eval, train_test_exp, detected_res
         for root, dirs, files in os.walk(detected_results):
             for file in files:
                 if file.endswith(".json"):
-                    frame_key = file.split("_")[1]  # "0196"과 같은 frame 번호 추출
+                    frame_key = file.split("_")[1][:-5]  # "0196"과 같은 frame 번호 추출
                     file_path = os.path.join(root, file)
                     with open(file_path, "r") as json_file:
                         data = json.load(json_file)

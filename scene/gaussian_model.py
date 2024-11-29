@@ -487,7 +487,7 @@ class GaussianModel:
         # 해당 이미지 좌표에 대응되는 영역에 존재하는 가우시안들을 찾는다.
         # 해당 가우시안들의 색상을 변경한다. ( marking )
         mask = self.get_marked_gaussians(cam)
-
+        # self.saving_projected_image(cam)
         if modify:
             self.modify_gaussians_color(mask, color)
 
@@ -509,7 +509,7 @@ class GaussianModel:
         mark_range = (max_x - min_x, max_y - min_y)
         base_pixel = (min_x, min_y)
 
-        padding = 30
+        padding = 0
 
         # 범위 설정
         x_range = (base_pixel[0] - padding, base_pixel[0] + mark_range[0] + padding)
@@ -537,7 +537,7 @@ class GaussianModel:
 
         # depth를 고려하여, 가까이 있는(depth가 작은) Gaussian들만을 고려한다.
         depth = points_camera[:, 2]
-        depth_map = cam.depth_map[cracked_points[:,0], cracked_points[:,1]]
+        depth_map = cam.depth_map[cracked_points[:,1], cracked_points[:,0]]
         valid_num = np.sum(depth_map != 0)
 
         # 유효한 depth value의 mean
@@ -545,14 +545,26 @@ class GaussianModel:
             depth_value = depth_map.sum() / valid_num
         else:
             depth_value = 0
-            
+
         if depth_value == 0:
             print('No valid depth')
             return np.array([])
         
+        # Adaptive threshold ( +- 0.5 )
         depth_mask = np.abs(depth - depth_value) < 1.0
         final_mask = np.logical_and(depth_mask, valid_mask)
 
+        if final_mask.sum() == 0:
+            depth_mask = np.abs(depth - depth_value) < 1.5
+            final_mask = np.logical_and(depth_mask, valid_mask)
+
+            if final_mask.sum() == 0:
+                return valid_mask
+
+        elif final_mask.sum() >= 30:
+            depth_mask = np.abs(depth - depth_value) < 0.5
+            final_mask = np.logical_and(depth_mask, valid_mask)
+        
         return final_mask
 
     def modify_gaussians_color(self, mask, color = 'R'):
@@ -567,25 +579,7 @@ class GaussianModel:
 
         self._features_dc[mask] = feature.expand(mask.sum(), 1, 3).float().cuda()
         self._features_rest[mask] = feature.expand(mask.sum(), 15, 3).float().cuda()
-        self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
-
-    def get_index(self, cam, mask, margin_error = 50):
-        
-        points2D, camera_points = self.get_image_camera_coordinate_of_gaussian(cam)
-        points2D = torch.from_numpy(points2D).float().cuda()
-
-        true_indices = torch.nonzero(mask, as_tuple=True)[0].tolist()
-
-        min_depth = 1000
-        point_index = 0
-        point_index_list = []
-        for index in true_indices:
-            if camera_points[index, 2] < min_depth:
-                min_depth = camera_points[index, 2]
-                point_index = index
-                point_index_list.append(index)
-
-        return point_index_list, point_index 
+        # self._opacity[mask] = torch.zeros((mask.sum(), 1), device="cuda")
 
     def novelViewRenderer(self, cam, mask, pipe):
         from gaussian_renderer import render
@@ -595,9 +589,9 @@ class GaussianModel:
             self.point_cloud = o3d.geometry.PointCloud()
             self.point_cloud.points = o3d.utility.Vector3dVector(self.get_xyz.detach().cpu().numpy())
         
-        R, T = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=1.0, mask=mask)
+        R, T = self.create_camera_near_point(self.point_cloud, ref_cam = cam, distance=2.0, mask=mask)
 
-        nvCamera = Camera((cam.depth_map.shape[0], cam.depth_map.shape[1]), colmap_id=cam.uid, R=R, T=T, 
+        nvCamera = Camera((cam.depth_map.shape[1], cam.depth_map.shape[0]), colmap_id=cam.uid, R=R, T=T, 
                   FoVx=cam.FoVx, FoVy=cam.FoVy, depth_params=None,
                   image=None, invdepthmap=None, depth_path=None, normal_path=None,
                   image_name=f"{cam.image_name}_based_novel_view", uid=cam.uid, data_device='cuda',
@@ -626,11 +620,15 @@ class GaussianModel:
         else:   
             pcd = self.compute_normals_with_pca(point_cloud)
 
+        
         # target_point = np.asarray(pcd.points)[mask].mean(0)
         target_point = np.asarray(pcd.points)[mask][-1]
 
         # 마스크된 포인트들의 평균 노멀 벡터를 사용
         normal_vector = np.asarray(pcd.normals)[mask].mean(0)
+
+        if np.dot(normal_vector, target_point) < 0:  # 노멀 방향 확인 및 조정
+            normal_vector = -normal_vector
 
         # 카메라 위치: target_point에서 normal_vector 방향으로 distance 떨어진 위치
         camera_position = target_point - normal_vector * distance
@@ -674,23 +672,22 @@ class GaussianModel:
         homo_means3D = np.hstack([means3D, np.ones((means3D.shape[0], 1))])
 
         # Cam information
-        intrinsic = cam.intrinsic
-        R, T = cam.R, cam.T
-        ref_pose = np.eye(4)
-        ref_pose[:3, :3] = R
-        ref_pose[:3, 3] = T
+        intrinsic = cam.intrinsic.astype(np.float64)
+        w2c = cam.w2c
+        R = w2c[:3, :3]
+        R = R.T
+        T = w2c[:3,3]
 
         # world to camera
-        points_camera = (ref_pose @ homo_means3D.T).T[:, :3]
+        points_camera = np.matmul(R, means3D.T) + np.expand_dims(T,1)
+        points_camera = points_camera.T
 
         # camera to image
-        points_2D_homogeneous = (intrinsic @ points_camera.T).T
+        points_2d = np.matmul(intrinsic, points_camera[:,:3].T)
+        points_2d /= points_camera[:, 2].reshape(-1)  # z축으로 나눔
+        points_2d = points_2d[:2].T
 
-        # Normalize by the third coordinate to get (x, y)
-        points_2D = points_2D_homogeneous[:, :2] / points_2D_homogeneous[:, 2].reshape(-1,1)
-
-        return points_2D.astype(int), points_camera
-    
+        return points_2d.astype(np.int32), points_camera
 
     def compute_normals_with_pca(self, point_cloud, radii=[1.0], max_nn=100):
         import numpy as np
@@ -741,3 +738,31 @@ class GaussianModel:
         point_cloud.normals = o3d.utility.Vector3dVector(normals)
         
         return point_cloud
+    
+    def saving_marked_image(self, cam, pipe):
+        from gaussian_renderer import render
+        from PIL import Image
+
+        render_pkg = render(cam, self, pipe, torch.zeros(3).cuda(), use_trained_exp=False, separate_sh=False)
+        image = render_pkg["render"].detach().cpu().numpy().transpose(1,2,0)
+        image = Image.fromarray((image * 255).astype(np.uint8))
+        image.save(f"marked_image_rendered_result/marked_image_{cam.image_name}.png")
+    
+    def saving_projected_image(self, cam):
+        from PIL import Image
+        from custom_util import sh2RGB
+
+        width = cam.depth_map.shape[1]
+        height = cam.depth_map.shape[0]
+
+        points_2D, _ = self.get_image_camera_coordinate_of_gaussian(cam)
+        image = np.zeros((cam.depth_map.shape[0], cam.depth_map.shape[1], 3), dtype=np.uint8)
+
+        valid_mask = (points_2D[:, 0] >= 0) & (points_2D[:, 0] < width) & (points_2D[:, 1] >= 0) & (points_2D[:, 1] < height)
+        valid_points = points_2D[valid_mask]
+        valid_colors = sh2RGB(self, cam)[valid_mask].detach().cpu().numpy() * 255
+
+        image[valid_points[:, 1], valid_points[:, 0]] = valid_colors
+
+        image = Image.fromarray(image)
+        image.save(f"projected_image/projected_image_{cam.image_name}.png")
