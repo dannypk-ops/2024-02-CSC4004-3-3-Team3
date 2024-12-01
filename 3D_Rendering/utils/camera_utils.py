@@ -44,7 +44,7 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
         resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
     else:  # should be a type that converts to float
         if args.resolution == -1:
-            if orig_w > 2000:
+            if orig_w > 1600:
                 global WARNED
                 if not WARNED:
                     print("[ INFO ] Encountered quite large input images (>1.6K pixels width), rescaling to 1.6K.\n "
@@ -64,8 +64,8 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
     frame_number = cam_info.image_name.split("_")[1].split(".")[0]
     crack_information = cam_info.crack_points.get(frame_number, None)
 
-    scale = 1.0
-    return Camera(resolution, colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, scale=scale,
+
+    return Camera(resolution, colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, depth_params=cam_info.depth_params,
                   image=image, invdepthmap=None, depth_path=cam_info.depth_path, normal_path=cam_info.normal_path,
                   image_name=cam_info.image_name, uid=id, data_device=args.data_device,

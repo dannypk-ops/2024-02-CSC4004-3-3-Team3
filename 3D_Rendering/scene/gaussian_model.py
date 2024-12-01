@@ -619,7 +619,6 @@ class GaussianModel:
             pcd = point_cloud
         else:   
             pcd = self.compute_normals_with_pca(point_cloud)
-
         
         # target_point = np.asarray(pcd.points)[mask].mean(0)
         target_point = np.asarray(pcd.points)[mask][-1]

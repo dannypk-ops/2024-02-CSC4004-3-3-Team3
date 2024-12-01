@@ -28,7 +28,6 @@ input_folder = args.input_folder
 output_folder = args.output_folder
 os.makedirs(output_folder, exist_ok=True)
 
-
 # 프레임 처리
 for frame_num in range(0, args.frame_count):  
     file_name = f'frame_{frame_num:04d}.jpg'
