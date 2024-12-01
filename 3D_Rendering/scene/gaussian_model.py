@@ -568,7 +568,7 @@ class GaussianModel:
         return final_mask
 
     def modify_gaussians_color(self, mask, color = 'R'):
-        from custom_functions import RGB2SH
+        from custom_util import RGB2SH
 
         if color == 'R':
             feature = torch.from_numpy(RGB2SH(np.array([1,0,0]))).unsqueeze(0)

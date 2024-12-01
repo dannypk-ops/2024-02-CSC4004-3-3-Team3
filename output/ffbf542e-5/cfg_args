@@ -1,0 +1,1 @@
+Namespace(sh_degree=3, source_path='/home/dannypk99/Desktop/robot', model_path='./output/ffbf542e-5', yolo_path='/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/3D_Rendering/weights/best.pt', detected_results='/home/dannypk99/Desktop/json/pure', images='images', depths='', resolution=-1, white_background=False, train_test_exp=False, data_device='cuda', eval=False)

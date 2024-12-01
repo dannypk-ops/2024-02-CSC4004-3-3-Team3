@@ -26,6 +26,7 @@ class Camera(nn.Module):
                  ):
         super(Camera, self).__init__()
 
+        self.scale = scale
         self.uid = uid
         self.colmap_id = colmap_id
         self.R = R
@@ -39,6 +40,10 @@ class Camera(nn.Module):
 
         # crack Point Information
         if crack_points is not None and crack_points != []:
+            if self.scale != 1.0:
+                new_pixels = crack_points[0]['pixels']
+                downsampled_pixels = [[int(x//self.scale), int(y//self.scale)] for x, y in new_pixels]
+                crack_points[0]['pixels'] = downsampled_pixels
             self.cracked_points = crack_points
         else:
             self.cracked_points = None
