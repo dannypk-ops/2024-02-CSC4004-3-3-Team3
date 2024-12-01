@@ -568,7 +568,7 @@ class GaussianModel:
         return final_mask
 
     def modify_gaussians_color(self, mask, color = 'R'):
-        from custom_functions import RGB2SH
+        from custom_util import RGB2SH
 
         if color == 'R':
             feature = torch.from_numpy(RGB2SH(np.array([1,0,0]))).unsqueeze(0)
@@ -619,7 +619,6 @@ class GaussianModel:
             pcd = point_cloud
         else:   
             pcd = self.compute_normals_with_pca(point_cloud)
-
         
         # target_point = np.asarray(pcd.points)[mask].mean(0)
         target_point = np.asarray(pcd.points)[mask][-1]

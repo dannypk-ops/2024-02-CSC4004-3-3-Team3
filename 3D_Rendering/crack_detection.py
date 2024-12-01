@@ -18,6 +18,11 @@ args = parser.parse_args()
 # YOLOv8 모델 로드
 model = YOLO(args.weights)
 
+if __debug__:
+    args.output_folder = '/home/dannypk99/Desktop/json'
+    args.input_folder = '/home/dannypk99/Desktop/dataset/datasets/Crack/building'
+
+
 # 입력 및 출력 디렉토리 설정
 input_folder = args.input_folder
 output_folder = args.output_folder
