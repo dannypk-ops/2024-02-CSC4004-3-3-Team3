@@ -744,10 +744,11 @@ async function main() {
         carousel = false;
     } catch (err) {}
     const url = new URL(
-        // "nike.splat",
-        // location.href,
-        params.get("url") || "point_cloud.ply",
+        params.get("url") || "marked_point_cloud.ply",
         "http://localhost:8000/ply_files/",
+        // params.get("url") || "truck.splat",
+        // "https://huggingface.co/cakewalk/splat-data/resolve/main/",
+        // 터치 기능 시연을 위한 공개 데이터
     );
     const req = await fetch(url, {
         mode: "cors", // no-cors, *cors, same-origin
