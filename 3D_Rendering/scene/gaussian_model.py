@@ -483,24 +483,24 @@ class GaussianModel:
         self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.denom[update_filter] += 1
 
-    def mark_crack_points(self, cam, modify = False, color = 'R'):
+    def mark_crack_points(self, cam, index, modify = False, color = 'R'):
         # 해당 이미지 좌표에 대응되는 영역에 존재하는 가우시안들을 찾는다.
         # 해당 가우시안들의 색상을 변경한다. ( marking )
-        mask = self.get_marked_gaussians(cam)
+        mask = self.get_marked_gaussians(cam, index)
         # self.saving_projected_image(cam)
         if modify:
             self.modify_gaussians_color(mask, color)
 
         return mask
     
-    def get_marked_gaussians(self, cam, distance_threshold = 0.7, epsilon=1e-8):
+    def get_marked_gaussians(self, cam, index, distance_threshold = 0.7, epsilon=1e-8):
         import open3d as o3d
         from scipy.spatial import cKDTree
 
         means3D = self.get_xyz.detach().cpu().numpy()
         points_2D, points_camera = self.get_image_camera_coordinate_of_gaussian(cam)
 
-        cracked_points = cam.cracked_points[0]['pixels']
+        cracked_points = cam.cracked_points[index]['pixels']
         cracked_points = np.array(cracked_points)
 
         min_x, min_y = cracked_points.min(0)

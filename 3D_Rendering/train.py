@@ -189,9 +189,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     gaussians.optimizer.step()
                     gaussians.optimizer.zero_grad(set_to_none = True)
 
-            if (iteration in checkpoint_iterations):
-                print("\n[ITER {}] Saving Checkpoint".format(iteration))
-                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+            # if (iteration in checkpoint_iterations):
+            #     print("\n[ITER {}] Saving Checkpoint".format(iteration))
+            #     torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
 
             if iteration == max_iter:
                 viewpoint_stack = scene.getTrainCameras()
@@ -291,17 +291,17 @@ if __name__ == "__main__":
         args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/building"
         # args.source_path = "/home/dannypk99/Desktop/dataset/datasets/Crack/stairs"
         # args.detected_results = '3D_Rendering/detected_results/selected_robot'
-        # args.detected_results = '3D_Rendering/detected_results/selected_building'
+        args.detected_results = '3D_Rendering/detected_results/selected_building'
         # args.detected_results = '3D_Rendering/detected_results/selected_stairs'
-        args.detected_results = '3D_Rendering/detected_results/pure'
-        args.novelview_refinement = False
+        # args.detected_results = '3D_Rendering/detected_results/pure'
+        args.novelview_refinement = True
 
     args.resolution = 1
     args.densification_interval = 300
-    args.save_iterations = [15000, 30000]
+    args.save_iterations = [30000]
     args.save_path = "/home/dannypk99/Desktop/Colmap/ply_output"
     args.weights = '/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/3D_Rendering/weights/best.pt'
-    max_iter = 30000
+    max_iter = 100
 
     detact_model = YOLO(args.weights)
     print("Optimizing " + args.model_path)
