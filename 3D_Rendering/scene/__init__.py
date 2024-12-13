@@ -119,23 +119,24 @@ class Scene:
 
     def mark_crack_points(self, cam_list, pipe, detection_model, novel=False):
         for cam in cam_list:
-            if float(cam.cracked_points[0]['probability']) < 0.7:
-                mask = self.gaussians.mark_crack_points(cam)
-                if mask.sum() != 0:
-                    if novel:
-                        novelview_image = self.gaussians.novelViewRenderer(cam, mask, pipe)
-                        # Saving novel view image
-                        path = f"3D_Rendering/novel_view_image/novelview_image_{cam.image_name[:-4]}.jpg"
-                        # path = f"/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/novel_view_image/stairs/novelview_image_{cam.image_name[:-4]}"
-                        # self.save_numpy_img(novelview_image, f"{path}.jpg")
-                        new_prob = 0 if detection_model(f"{path}.jpg")[0].boxes.conf.numel() == 0 else detection_model(f"{path}.jpg")[0].boxes.conf[0]
-                        if new_prob > 0.7:
-                            self.gaussians.mark_crack_points(cam, modify=True, color='R')
+            for i in range(len(cam.cracked_points)):
+                if float(cam.cracked_points[i]['probability']) < 0.7:
+                    mask = self.gaussians.mark_crack_points(cam, index=i)
+                    if mask.sum() != 0:
+                        if novel:
+                            novelview_image = self.gaussians.novelViewRenderer(cam, mask, pipe)
+                            # Saving novel view image
+                            path = f"3D_Rendering/novel_view_image/novelview_image_{i}_{cam.image_name[:-4]}"
+                            # path = f"/home/dannypk99/Desktop/Gaussian_Splatting/gaussian-splatting/novel_view_image/stairs/novelview_image_{cam.image_name[:-4]}"
+                            # self.save_numpy_img(novelview_image, f"{path}.jpg")
+                            new_prob = 0 if detection_model(f"{path}.jpg")[0].boxes.conf.numel() == 0 else detection_model(f"{path}.jpg")[0].boxes.conf[0]
+                            if new_prob > 0.7:
+                                self.gaussians.mark_crack_points(cam, index=i, modify=True, color='R')
+                            else:
+                                print("Crack dismissed...")
+                                self.gaussians.mark_crack_points(cam, index=i, modify=True, color='R')
+
                         else:
-                            print("Crack dismissed...")
-                    else:
-                        self.gaussians.mark_crack_points(cam, modify=True, color='R')
-            else:
-                self.gaussians.mark_crack_points(cam, modify=True, color='R')
-
-
+                            self.gaussians.mark_crack_points(cam, index=i, modify=True, color='R')
+                else:
+                    self.gaussians.mark_crack_points(cam, index = i, modify=True, color='R')
