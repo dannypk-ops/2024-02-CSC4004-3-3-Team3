@@ -10,7 +10,8 @@ This project leverages robotics, deep learning-based crack detection, and 3D map
 
 ### implementation
 Please set up an environment identical to the one provided by the two GitHub pages below.
-
+- <https://github.com/graphdeco-inria/gaussian-splatting>
+- <https://colmap.github.io/>
 
 
 
@@ -22,13 +23,29 @@ input
 <summary>Click to toggle contents of detail JSON Format</summary>
 
 ```
-
+{
+  "0.85": [
+    {
+      "filled_coordinates": [
+        [331, 434],
+        [331, 435],
+        [331, 436],
+        [331, 437],
+        [331, 438],
+        [331, 439],
+        [331, 440],
+        [331, 441],
+        [331, 442]
+      ]
+    }
+  ]
+}
 ```
 </details>
 
 </br>
 
-Result
+### Result
 Image stream from Robot</br>
 ![c](https://github.com/user-attachments/assets/c4656cc0-2e3e-4f73-ac0d-129ed3e1d907)
 
@@ -38,3 +55,9 @@ Image stream from handheld Camera ( iphone 16-pro )
 
 
 ![b](https://github.com/user-attachments/assets/a34dc340-e64a-4814-a96c-bdc89cc433ec)
+
+
+### Reflection
+By implementing the transformations between world-to-camera and camera-to-image spaces, I gained a clearer understanding of how 3D points are projected onto a 2D image using camera parameters. </br>
+While modifying the Gaussian Splatting code, I could observe how these transformations directly impact the rendering results, bridging the gap between theory and practice. </br>
+This iterative process of code modification and result validation significantly improved my intuitive understanding of the principles and their implementation.
